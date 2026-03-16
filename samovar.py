@@ -321,13 +321,22 @@ def _run_investigate_batch(
 ):
     """Run multiple investigations in parallel via ThreadPoolExecutor."""
 
-    def _investigate_one(params: dict) -> tuple[dict, dict]:
-        """Spawn a single investigate agent. Returns (params, result)."""
+    # Pre-fetch posts in the main thread (sqlite3 connections are not thread-safe)
+    tasks = []
+    for step in steps:
+        params = step.get("params", {})
         post_id = params.get("post_id")
         post = state.get_post(str(post_id))
         if not post:
-            return params, {"error": f"Post {post_id} not found"}
+            print(f"    Post {post_id}: not found, skipping.")
+            continue
+        tasks.append((params, post))
 
+    if not tasks:
+        return
+
+    def _investigate_one(params: dict, post: dict) -> tuple[dict, dict]:
+        """Spawn a single investigate agent. Returns (params, result)."""
         thread_url = params.get("thread_url") or post.get("thread_url")
         reason = params.get("reason", "flagged for investigation")
 
@@ -344,10 +353,10 @@ def _run_investigate_batch(
         return params, result
 
     # Spawn all investigations in parallel
-    with ThreadPoolExecutor(max_workers=min(len(steps), 5)) as executor:
+    with ThreadPoolExecutor(max_workers=min(len(tasks), 5)) as executor:
         futures = {
-            executor.submit(_investigate_one, step.get("params", {})): step
-            for step in steps
+            executor.submit(_investigate_one, params, post): params
+            for params, post in tasks
         }
 
         for future in as_completed(futures):
@@ -451,6 +460,10 @@ def _run_classify(config: dict, lexicon: dict, project_dir: Path, state: State, 
         if classifications:
             state.add_classifications(classifications, run_id)
             total_classified += len(classifications)
+        else:
+            # Agent returned no classifications — break to avoid infinite loop
+            log.warning("Classify agent returned no classifications for batch of %d posts", len(posts))
+            break
 
         flagged = result.get("flagged", [])
         total_flagged += len(flagged)
