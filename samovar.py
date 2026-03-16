@@ -58,8 +58,15 @@ def cmd_init(args):
         cwd=str(target), capture_output=True,
     )
 
-    print(f"\n  ✓ Created {target}")
-    print(f"  ✓ Initialized git repo\n")
+    print(f"""
+  ✓ Created {target}
+  ✓ Initialized git repo
+
+  ___  __ _ _ __ ___   _____   ____ _ _ __
+ / __|/ _` | '_ ` _ \\ / _ \\ \\ / / _` | '__|
+ \\__ \\ (_| | | | | | | (_) \\ V / (_| | |
+ |___/\\__,_|_| |_| |_|\\___/ \\_/ \\__,_|_|
+""")
 
     # 3. Run setup agent as a multi-turn conversation
     skill_path = Path(__file__).resolve().parent / "skills" / "setup.md"
