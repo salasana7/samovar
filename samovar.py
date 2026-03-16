@@ -7,6 +7,7 @@ import logging
 import shutil
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
 
@@ -127,10 +128,30 @@ def cmd_run(args):
     state.conn.commit()
 
     # Step 2: Execute the plan
-    for i, step in enumerate(steps, 1):
+    # Group consecutive investigate steps for parallel execution
+    grouped_steps = _group_investigate_steps(steps)
+
+    step_num = 0
+    for group in grouped_steps:
+        if isinstance(group, list):
+            # Parallel investigate batch
+            step_num += 1
+            print(f"\n  [{step_num}/{len(grouped_steps)}] investigate ({len(group)} posts in parallel)...")
+            try:
+                _run_investigate_batch(group, config, lexicon, project_dir, state, run_id)
+            except Exception as e:
+                log.error("Investigate batch failed: %s", e)
+                print(f"  Error in investigate batch: {e}")
+                state.finish_run(run_id, "failed_at_investigate")
+                state.close()
+                sys.exit(1)
+            continue
+
+        step = group
         action = step["action"]
         params = step.get("params", {})
-        print(f"\n  [{i}/{len(steps)}] {action}...")
+        step_num += 1
+        print(f"\n  [{step_num}/{len(grouped_steps)}] {action}...")
 
         try:
             if action == "collect":
@@ -260,6 +281,98 @@ def cmd_report(args):
 # ---------------------------------------------------------------------------
 # Internal step runners
 # ---------------------------------------------------------------------------
+
+
+def _group_investigate_steps(steps: list[dict]) -> list:
+    """Group consecutive investigate steps into batches for parallel execution.
+
+    Returns a mixed list: single step dicts for non-investigate actions,
+    and lists of step dicts for consecutive investigate runs.
+    """
+    grouped = []
+    investigate_batch = []
+
+    for step in steps:
+        if step["action"] == "investigate":
+            investigate_batch.append(step)
+        else:
+            if investigate_batch:
+                # Flush the batch (keep single investigations as plain steps)
+                if len(investigate_batch) == 1:
+                    grouped.append(investigate_batch[0])
+                else:
+                    grouped.append(investigate_batch)
+                investigate_batch = []
+            grouped.append(step)
+
+    # Flush any remaining
+    if investigate_batch:
+        if len(investigate_batch) == 1:
+            grouped.append(investigate_batch[0])
+        else:
+            grouped.append(investigate_batch)
+
+    return grouped
+
+
+def _run_investigate_batch(
+    steps: list[dict], config: dict, lexicon: dict,
+    project_dir: Path, state: State, run_id: int,
+):
+    """Run multiple investigations in parallel via ThreadPoolExecutor."""
+
+    def _investigate_one(params: dict) -> tuple[dict, dict]:
+        """Spawn a single investigate agent. Returns (params, result)."""
+        post_id = params.get("post_id")
+        post = state.get_post(str(post_id))
+        if not post:
+            return params, {"error": f"Post {post_id} not found"}
+
+        thread_url = params.get("thread_url") or post.get("thread_url")
+        reason = params.get("reason", "flagged for investigation")
+
+        result = spawn_agent(
+            skill="investigate",
+            context={
+                "post": {**post, "current_label": params.get("label", ""), "reason": reason},
+                "thread_url": thread_url,
+                "lexicon": lexicon,
+                "taxonomy": config.get("taxonomy", {}),
+            },
+            project_dir=project_dir,
+        )
+        return params, result
+
+    # Spawn all investigations in parallel
+    with ThreadPoolExecutor(max_workers=min(len(steps), 5)) as executor:
+        futures = {
+            executor.submit(_investigate_one, step.get("params", {})): step
+            for step in steps
+        }
+
+        for future in as_completed(futures):
+            params, result = future.result()
+            post_id = str(params.get("post_id", "?"))
+
+            if result.get("error"):
+                print(f"    Post {post_id}: {result['error']}")
+                continue
+
+            state.add_investigation(result, run_id)
+
+            new_entries = result.get("new_lexicon_entries", [])
+            if new_entries:
+                _append_lexicon_entries(new_entries, project_dir, source_post_id=post_id)
+
+            rec = result.get("recommendation", "?")
+            print(f"    Post {post_id}: {rec}")
+
+            if rec == "reclassify" and result.get("revised_label"):
+                state.update_classification(
+                    post_id, result["revised_label"], result.get("confidence", "medium")
+                )
+
+    print(f"  Completed {len(steps)} investigations.")
 
 
 def _run_collect(params: dict, config: dict, project_dir: Path, state: State):
