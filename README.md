@@ -6,7 +6,7 @@ Built for processing Russian-language data from any source — forum threads, Te
 
 ## Why
 
-Russian-language internet slang evolves fast, has almost no dictionary coverage, and is full of irony that defeats keyword-based analysis. Samovar solves this with a **lexicon feedback loop**: agents flag what they don't understand, the human analyst teaches them, and every future run benefits from that correction. The lexicon becomes the project's institutional memory.
+Russian-language internet slang evolves fast, has almost no dictionary coverage, and is full of irony that defeats keyword-based analysis. Samovar solves this with a **lexicon feedback loop**: agents flag what they don't understand, a Russian-speaking analyst teaches them, and every future run benefits from that correction. The lexicon becomes the project's institutional memory.
 
 The tool fills a gap in the Russian OSINT ecosystem: there are good per-platform collection tools (Telethon, vk_api, imageboard APIs), but nothing that orchestrates cross-source analysis with structured classification, adversarial review, and human checkpoints.
 
