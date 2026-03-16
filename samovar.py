@@ -59,34 +59,74 @@ def cmd_init(args):
     )
 
     print(f"\n  ✓ Created {target}")
-    print(f"  ✓ Initialized git repo")
-    print(f"\n  Launching setup agent...\n")
+    print(f"  ✓ Initialized git repo\n")
 
-    # 3. Spawn setup agent
+    # 3. Run setup agent as a multi-turn conversation
     skill_path = Path(__file__).resolve().parent / "skills" / "setup.md"
     skill_text = skill_path.read_text()
 
-    # First message: agent introduces itself (non-interactive)
-    result = subprocess.run(
-        [
-            "claude",
-            "-p", "Introduce yourself briefly and ask me about my research project.",
-            "--system-prompt", skill_text,
+    _run_setup_agent(skill_text, str(target))
+
+
+def _run_setup_agent(skill_text: str, project_dir: str):
+    """Run the setup agent as a multi-turn conversation with the user."""
+    first_message = True
+
+    # Initial prompt to kick off the conversation
+    prompt = "Start setting up this samovar project. Introduce yourself briefly and ask me your first question."
+
+    while True:
+        cmd = [
+            "claude", "-p", prompt,
             "--allowedTools", "Read,Write,Edit,Bash,Glob,Grep",
-        ],
-        capture_output=True, text=True, cwd=str(target),
-    )
+        ]
 
-    # Print the agent's introduction
-    if result.stdout.strip():
-        print(result.stdout.strip())
-    print()
+        if first_message:
+            cmd.extend(["--system-prompt", skill_text])
+            first_message = False
+        else:
+            cmd.append("--continue")
 
-    # Continue in interactive mode
-    subprocess.run(
-        ["claude", "--continue"],
-        cwd=str(target),
-    )
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, cwd=project_dir, timeout=120,
+        )
+
+        response = result.stdout.strip()
+        if not response:
+            print("  Setup agent returned no response.")
+            break
+
+        print(f"\n{response}\n")
+
+        # Check if the agent signaled it's done
+        if _setup_looks_done(response):
+            break
+
+        # Get user input
+        try:
+            user_input = input("> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n  Setup interrupted.\n")
+            break
+
+        if not user_input:
+            continue
+
+        prompt = user_input
+
+
+def _setup_looks_done(response: str) -> bool:
+    """Check if the setup agent's response indicates setup is complete."""
+    done_signals = [
+        "samovar run",
+        "samovar collect",
+        "project is ready",
+        "setup is complete",
+        "you're all set",
+        "ready to start",
+    ]
+    response_lower = response.lower()
+    return any(signal in response_lower for signal in done_signals)
 
 
 def cmd_status(args):
