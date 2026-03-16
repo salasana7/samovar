@@ -25,7 +25,6 @@ def spawn_agent(
     context: dict,
     project_dir: Path,
     allowed_tools: list[str] | None = None,
-    budget: float = 2.0,
     retry: bool = True,
 ) -> dict:
     """Spawn a Claude Code session with a skill and context, return parsed JSON."""
@@ -65,10 +64,8 @@ def spawn_agent(
         "--allowedTools",
         ",".join(tools),
     ]
-    if budget:
-        cmd.extend(["--max-budget-usd", str(budget)])
 
-    log.info("Spawning %s agent (budget: $%.2f)", skill, budget)
+    log.info("Spawning %s agent", skill)
 
     try:
         result = subprocess.run(
@@ -83,7 +80,7 @@ def spawn_agent(
         if retry:
             log.info("Retrying %s agent once...", skill)
             return spawn_agent(
-                skill, context, project_dir, allowed_tools, budget, retry=False
+                skill, context, project_dir, allowed_tools, retry=False
             )
         raise RuntimeError(f"Agent {skill} timed out after retry")
 
@@ -98,7 +95,7 @@ def spawn_agent(
         if retry:
             log.info("Retrying %s agent once...", skill)
             return spawn_agent(
-                skill, context, project_dir, allowed_tools, budget, retry=False
+                skill, context, project_dir, allowed_tools, retry=False
             )
         raise RuntimeError(f"Agent {skill} failed: {result.stderr[:500]}")
 

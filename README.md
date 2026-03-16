@@ -30,7 +30,7 @@ Samovar is a **two-layer system**:
 │  AGENTS (Claude Code sessions via `claude -p`)           │
 │                                                          │
 │  One-shot sessions, each with a skill file, restricted   │
-│  tool access, and a budget cap.                          │
+│  tool access, and isolated sessions.                      │
 │                                                          │
 │  ┌─────────────┐  Reads state, produces a plan           │
 │  │ Coordinator  │  (which steps to run and in what order) │
@@ -232,7 +232,7 @@ Projects can extend or replace this taxonomy in their `samovar.yaml`.
 - [ ] **Batch investigation** — Investigate multiple posts in a single agent session to reduce overhead when many posts share a thread.
 - [ ] **Incremental collection** — Track last-collected timestamps per source to avoid re-ingesting old data.
 - [ ] **Report diffing** — Compare findings across report cycles to surface trends automatically.
-- [ ] **Multi-language support** — The architecture is language-agnostic, but skill prompts currently optimize for Russian. Generalizing to other languages (Mandarin, Farsi, Arabic) would require parallel lexicon and skill prompt sets.
+- [ ] **Multi-language support** — Skill prompts currently optimize for Russian, but the architecture is language-agnostic. Supporting additional languages would require parallel lexicon and skill prompt sets.
 
 ## License
 
