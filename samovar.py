@@ -33,7 +33,7 @@ log = logging.getLogger("samovar")
 
 
 def cmd_init(args):
-    """Scaffold a new samovar project."""
+    """Scaffold a new samovar project with interactive setup."""
     target = Path.cwd() / args.name
     if target.exists():
         print(f"Error: directory '{args.name}' already exists.", file=sys.stderr)
@@ -41,19 +41,127 @@ def cmd_init(args):
 
     shutil.copytree(TEMPLATES_DIR, target)
 
-    # Personalize the config
-    config_path = target / CONFIG_FILENAME
-    text = config_path.read_text()
-    text = text.replace('name: ""', f'name: "{args.name}"', 1)
-    config_path.write_text(text)
-
     # Create runtime dirs
     (target / "data").mkdir(exist_ok=True)
     (target / "reports").mkdir(exist_ok=True)
     (target / ".samovar").mkdir(exist_ok=True)
 
-    print(f"Created project: {target}")
-    print(f"  Edit {CONFIG_FILENAME} to configure taxonomy, sources, and keywords.")
+    # Interactive setup
+    print(f"\n  Setting up project: {args.name}\n")
+
+    config_path = target / CONFIG_FILENAME
+
+    if sys.stdin.isatty():
+        answers = _interactive_setup(target)
+        _apply_answers_to_config(config_path, args.name, answers)
+    else:
+        # Non-interactive: just set the name
+        text = config_path.read_text()
+        text = text.replace('name: ""', f'name: "{args.name}"', 1)
+        config_path.write_text(text)
+        print("  Non-interactive mode — edit samovar.yaml to configure.")
+
+    # Initialize git repo
+    subprocess.run(
+        ["git", "init", "-q"], cwd=str(target),
+        capture_output=True, text=True,
+    )
+    subprocess.run(
+        ["git", "add", "-A"], cwd=str(target),
+        capture_output=True, text=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-q", "-m", "Initialize samovar project"],
+        cwd=str(target), capture_output=True, text=True,
+    )
+
+    print(f"\n  ✓ Created {target}")
+    print(f"  ✓ Initialized git repo")
+    print(f"\n  Next: review samovar.yaml, then run:")
+    print(f"    cd {args.name}")
+    print(f"    samovar collect")
+    print(f"    samovar run\n")
+
+
+def _interactive_setup(target: Path) -> dict:
+    """Walk the user through project setup, return answers dict."""
+    answers = {}
+
+    answers["description"] = _init_prompt("  What is this project about?\n  > ")
+    answers["analyst"] = _init_prompt("\n  Your name (analyst):\n  > ")
+    answers["languages"] = _init_prompt("\n  What languages is your source data in? (comma-separated)\n  > ")
+    answers["platforms"] = _init_prompt("\n  What platforms are you collecting from? (comma-separated)\n  > ")
+    answers["keywords"] = _init_prompt("\n  What keywords should collection target? (comma-separated)\n  > ")
+    answers["context_keywords"] = _init_prompt(
+        "\n  Any context/abuse-signal keywords? (comma-separated, or skip)\n  > "
+    )
+
+    # Import collector
+    collector = _init_prompt("\n  Do you have a collector script to import? (path, or skip)\n  > ")
+    if collector and collector.lower() != "skip":
+        collector_path = Path(collector).expanduser().resolve()
+        if collector_path.exists():
+            source_name = _init_prompt("  Source name for this collector:\n  > ")
+            if source_name:
+                source_name = source_name.strip()
+                dest_dir = target / "sources" / source_name
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(collector_path, dest_dir / "crawl.py")
+                answers["source_name"] = source_name
+                print(f"  ✓ Imported collector → sources/{source_name}/crawl.py")
+        else:
+            print(f"  ⚠ File not found: {collector_path}, skipping.")
+
+    return answers
+
+
+def _apply_answers_to_config(config_path: Path, name: str, answers: dict):
+    """Apply interactive answers to the template YAML via string replacement (preserves comments)."""
+    text = config_path.read_text()
+
+    text = text.replace('name: ""', f'name: "{name}"', 1)
+
+    if answers.get("description"):
+        text = text.replace('description: ""', f'description: "{answers["description"]}"', 1)
+    if answers.get("analyst"):
+        text = text.replace('analyst: ""', f'analyst: "{answers["analyst"]}"', 1)
+    if answers.get("languages"):
+        langs = [l.strip() for l in answers["languages"].split(",") if l.strip()]
+        text = text.replace("languages: [ru]", f"languages: [{', '.join(langs)}]", 1)
+    if answers.get("platforms"):
+        plats = [p.strip() for p in answers["platforms"].split(",") if p.strip()]
+        text = text.replace("platforms: []", f"platforms: [{', '.join(plats)}]", 1)
+    if answers.get("keywords"):
+        kws = [k.strip() for k in answers["keywords"].split(",") if k.strip()]
+        text = text.replace("primary: []", f"primary: [{', '.join(kws)}]", 1)
+    if answers.get("context_keywords") and answers["context_keywords"].lower() != "skip":
+        ckws = [k.strip() for k in answers["context_keywords"].split(",") if k.strip()]
+        text = text.replace("context: []", f"context: [{', '.join(ckws)}]", 1)
+
+    # Add source entry if collector was imported
+    if answers.get("source_name"):
+        src = answers["source_name"]
+        source_block = (
+            f"  {src}:\n"
+            f"    script: sources/{src}/crawl.py\n"
+            f"    args: []\n"
+        )
+        # Replace the commented-out examples section
+        text = text.replace(
+            "sources:\n  # Each source points to a collector script",
+            f"sources:\n{source_block}\n  # Each source points to a collector script",
+        )
+
+    config_path.write_text(text)
+
+
+def _init_prompt(text: str) -> str:
+    """Prompt for input during init, return empty string on skip/interrupt."""
+    try:
+        return input(text).strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return ""
 
 
 def cmd_status(args):
