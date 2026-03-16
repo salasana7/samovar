@@ -151,7 +151,7 @@ sources:
     script: sources/dvach/crawl.py
     args: ["--boards", "ai,pr"]
 
-  # Telegram channel export (e.g., via Telethon or snscrape)
+  # Telegram channel export (e.g., via Telethon)
   telegram:
     script: sources/telegram/export.py
     args: ["--channels", "@channel1,@channel2"]
@@ -228,7 +228,7 @@ Projects can extend or replace this taxonomy in their `samovar.yaml`.
 
 ## Roadmap
 
-- [ ] **Source adapters** — Reference integrations for common Russian-platform tools (Telethon, vk_api, snscrape, forum-dl). The JSONL collector contract is already compatible with all of them; the work is packaging thin wrappers.
+- [ ] **Source adapters** — Reference integrations for common Russian-platform tools (Telethon for Telegram, vk_api for VK, 2ch.hk JSON API for imageboards). The JSONL collector contract is already compatible; the work is packaging thin wrappers.
 - [ ] **Batch investigation** — Investigate multiple posts in a single agent session to reduce overhead when many posts share a thread.
 - [ ] **Incremental collection** — Track last-collected timestamps per source to avoid re-ingesting old data.
 - [ ] **Report diffing** — Compare findings across report cycles to surface trends automatically.
