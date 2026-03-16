@@ -62,17 +62,29 @@ def cmd_init(args):
     print(f"  ✓ Initialized git repo")
     print(f"\n  Launching setup agent...\n")
 
-    # 3. Spawn interactive Claude session with setup skill
+    # 3. Spawn setup agent
     skill_path = Path(__file__).resolve().parent / "skills" / "setup.md"
     skill_text = skill_path.read_text()
 
-    subprocess.run(
+    # First message: agent introduces itself (non-interactive)
+    result = subprocess.run(
         [
             "claude",
+            "-p", "Introduce yourself briefly and ask me about my research project.",
             "--system-prompt", skill_text,
             "--allowedTools", "Read,Write,Edit,Bash,Glob,Grep",
-            "Start setting up this samovar project. Introduce yourself briefly and ask me about my research.",
         ],
+        capture_output=True, text=True, cwd=str(target),
+    )
+
+    # Print the agent's introduction
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    print()
+
+    # Continue in interactive mode
+    subprocess.run(
+        ["claude", "--continue"],
         cwd=str(target),
     )
 
