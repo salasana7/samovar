@@ -1,0 +1,63 @@
+project:
+  name: ""
+  description: ""
+  analyst: ""
+
+scope:
+  platforms: []          # Target platforms (e.g., [dvach, telegram, vk])
+  languages: [ru]        # Source languages
+  date_range:
+    start: ""            # Collection start date (YYYY-MM-DD)
+    end: ""              # Collection end date, or "ongoing"
+  geographic_focus: ""   # Region of interest
+  collection_notes: ""   # Freeform notes on scope and method
+
+taxonomy:
+  categories:
+    - id: jailbreak_or_bypass
+      name: Jailbreak / Safety Bypass
+      description: Techniques to circumvent model safety measures, including system prompt extraction, role manipulation, and alignment bypass methods.
+
+    - id: prompt_injection
+      name: Prompt Injection
+      description: Manipulating model behavior through crafted inputs, indirect injection via external content, or prompt leaking.
+
+    - id: proxy_or_reselling
+      name: Proxy / Reselling Abuse
+      description: Unauthorized API access sharing, reverse proxy services, shared API keys, or commercial reselling of model access.
+
+    - id: stolen_credentials
+      name: Stolen Credentials
+      description: Stolen or leaked API keys, compromised accounts, or unauthorized access to paid services.
+
+    - id: harmful_content
+      name: Harmful Content Generation
+      description: Using AI models to generate illegal, abusive, or dangerous content.
+
+    - id: capability_elicitation
+      name: Capability Elicitation
+      description: Probing or extracting dangerous model capabilities, including CBRN knowledge, cyber offense, or manipulation techniques.
+
+    - id: none_or_unclear
+      name: None / Unclear
+      description: No clear safety risk signal, benign discussion, or insufficient context to classify.
+
+  severity: [low, medium, high]
+  confidence: [low, medium, high]
+
+sources:
+  # Each source points to a collector script that outputs JSON lines to stdout.
+  # See sources/collector_template.py for the expected output format.
+  #
+  # Examples:
+  # dvach:
+  #   script: sources/dvach/crawl.py
+  #   args: ["--boards", "ai,pr,s"]
+  # telegram:
+  #   script: sources/telegram/export.py
+  #   args: ["--channels", "@channel1,@channel2"]
+
+keywords:
+  primary: []       # Target keywords for collection
+  context: []       # Context/abuse signal keywords
+  discovered: []    # Added through analysis feedback loop

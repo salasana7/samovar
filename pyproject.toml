@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "samovar"
+version = "0.1.0"
+description = "OSINT research harness that orchestrates AI agents for threat intelligence"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Camila" }]
+dependencies = []
+
+[project.scripts]
+samovar = "samovar:main"
+
+[tool.setuptools.packages.find]
+include = ["samovar*", "lib*", "skills*"]
