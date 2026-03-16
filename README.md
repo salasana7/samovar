@@ -32,6 +32,9 @@ Samovar is a **two-layer system**:
 │  One-shot sessions, each with a skill file, restricted   │
 │  tool access, and isolated sessions.                      │
 │                                                          │
+│  ┌─────────────┐  Configures new projects interactively,  │
+│  │ Setup        │  reads existing scripts/data, writes    │
+│  └─────────────┘  collector adapters                      │
 │  ┌─────────────┐  Reads state, produces a plan           │
 │  │ Coordinator  │  (which steps to run and in what order) │
 │  └─────────────┘                                         │
@@ -69,19 +72,32 @@ The **coordinator agent** plans which steps to run based on current project stat
 ## Setup
 
 ```bash
-git clone https://github.com/yourusername/samovar.git
+git clone https://github.com/salasana7/samovar.git
 cd samovar
-pip install -e .
+pip install .
 ```
 
 ### Create a project
 
 ```bash
 samovar init my-research
-cd my-research
 ```
 
-This scaffolds:
+This scaffolds the project, initializes a git repo, and launches an interactive **setup agent** that walks you through configuration:
+
+![samovar init](https://raw.githubusercontent.com/salasana7/samovar/main/docs/init-screenshot.png)
+
+The setup agent:
+- Asks about your research goals, target platforms, languages, and keywords
+- Reads your existing crawler scripts or datasets and writes collector adapters
+- Configures `samovar.yaml` with project info, scope, sources, and keywords
+- Seeds the lexicon if you have existing domain knowledge
+
+No manual YAML editing required.
+
+### Project structure
+
+After setup, your project looks like:
 
 ```
 my-research/
@@ -90,21 +106,11 @@ my-research/
 │   ├── slang.md          # Slang dictionary (grows during analysis)
 │   ├── techniques.md     # Known TTPs
 │   └── corrections.md    # Past classification mistakes
-├── sources/
-│   └── collector_template.py  # Reference collector script
+├── sources/              # Collector scripts (generated or imported)
 ├── data/                 # Raw collected data (gitignored)
 ├── reports/              # Generated threat intel reports
 └── .samovar/             # Harness state DB (gitignored)
 ```
-
-### Configure your project
-
-Edit `samovar.yaml`:
-
-1. **Scope** — define platforms, languages, date range, geographic focus
-2. **Taxonomy** — customize categories for your research (a default AI safety taxonomy is included)
-3. **Sources** — point to your collector scripts (see [Adding sources](#adding-sources))
-4. **Keywords** — set target and context keywords for collection
 
 ### Run
 
