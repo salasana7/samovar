@@ -7,6 +7,7 @@ import logging
 import shutil
 import subprocess
 import sys
+import readline  # noqa: F401 — enables arrow keys/backspace in input()
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
