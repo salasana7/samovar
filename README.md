@@ -83,15 +83,18 @@ pip install .
 samovar init my-research
 ```
 
-This scaffolds the project, initializes a git repo, and launches an interactive **setup agent** that walks you through configuration:
+This scaffolds the project, initializes a git repo, and launches the setup flow:
 
 ![samovar init](https://raw.githubusercontent.com/salasana7/samovar/main/docs/init-screenshot.png)
 
-The setup agent:
-- Asks about your research goals, target platforms, languages, and keywords
-- Reads your existing crawler scripts or datasets and writes collector adapters
-- Configures `samovar.yaml` with project info, scope, sources, and keywords
-- Seeds the lexicon if you have existing domain knowledge
+The setup flow asks four questions, then hands everything to a **setup agent** that does the configuration:
+
+1. What is this project about?
+2. Do you have an existing collector script or dataset? (file path or skip)
+3. Your name (analyst)
+4. Any known domain-specific slang or techniques? (or skip)
+
+The agent reads your collector script's source code (never executes it), extracts platforms, keywords, and data format, writes a JSONL adapter, and configures `samovar.yaml` — all in one shot. The lexicon starts empty and grows through the analyst review loop during analysis.
 
 No manual YAML editing required.
 
