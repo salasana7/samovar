@@ -1,5 +1,6 @@
 """Interactive checkpoint CLI for human review of flagged items."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -7,33 +8,69 @@ from lib.state import State
 
 
 def run_checkpoint(flagged_items: list[dict], state: State, project_dir: Path) -> list[dict]:
-    """Present flagged items for human review. Returns list of corrections made."""
+    """Present flagged items for human review, grouped by type."""
     if not flagged_items:
         print("\n  No items to review.\n")
         return []
 
+    # Separate into review queues
+    unknown_term_items = []
+    low_confidence_items = []
+
+    for item in flagged_items:
+        terms = _parse_unknown_terms(item.get("unknown_terms_json"))
+        if terms:
+            item["_parsed_terms"] = terms
+            unknown_term_items.append(item)
+        elif item.get("confidence") == "low":
+            low_confidence_items.append(item)
+        # High confidence items don't appear in checkpoint
+
     corrections = []
-    total = len(flagged_items)
 
-    print(f"\n{'═' * 50}")
-    print(f"  REVIEW: {total} item{'s' if total != 1 else ''} flagged")
-    print(f"{'═' * 50}\n")
+    # Queue 1: Unknown terms
+    if unknown_term_items:
+        print(f"\n{'═' * 60}")
+        print(f"  UNKNOWN TERMS: {len(unknown_term_items)} posts with unrecognized slang/jargon")
+        print(f"{'═' * 60}\n")
+        corrections += _review_items(unknown_term_items, state, project_dir)
 
-    for i, item in enumerate(flagged_items, 1):
+    # Queue 2: Low confidence (no unknown terms)
+    if low_confidence_items:
+        print(f"\n{'═' * 60}")
+        print(f"  LOW CONFIDENCE: {len(low_confidence_items)} posts needing analyst judgment")
+        print(f"{'═' * 60}\n")
+        corrections += _review_items(low_confidence_items, state, project_dir)
+
+    return corrections
+
+
+def _review_items(items: list[dict], state: State, project_dir: Path) -> list[dict]:
+    """Present items one at a time for review."""
+    corrections = []
+    total = len(items)
+
+    for i, item in enumerate(items, 1):
         post_id = item["post_id"]
         label = item.get("label", "unknown")
         confidence = item.get("confidence", "?")
-        text = item.get("text", "")[:200]
+        severity = item.get("severity", "?")
+        text = item.get("text", "")
+        url = item.get("url", "")
         evidence = item.get("evidence_en", "")
-        unknown_terms = item.get("unknown_terms_json", "")
+        parsed_terms = item.get("_parsed_terms", [])
 
         print(f"  [{i}/{total}] Post #{post_id}")
-        print(f"           Label: {label} (confidence: {confidence})")
-        print(f"           Text: {text}")
+        print(f"           Label: {label} | Severity: {severity} | Confidence: {confidence}")
+        if url:
+            print(f"           URL: {url}")
+        print(f"           ───────────────────────────────────────")
+        print(f"           {text}")
+        print(f"           ───────────────────────────────────────")
         if evidence:
-            print(f"           Reason: {evidence}")
-        if unknown_terms:
-            print(f"           Unknown terms: {unknown_terms}")
+            print(f"           Evidence: {evidence}")
+        if parsed_terms:
+            print(f"           Unknown terms: {', '.join(parsed_terms)}")
         print()
         print("           (a) Accept    (r) Reclassify    (l) Add to lexicon    (s) Skip    (q) Quit")
         print()
@@ -77,6 +114,22 @@ def run_checkpoint(flagged_items: list[dict], state: State, project_dir: Path) -
             print("  — Skipped\n")
 
     return corrections
+
+
+def _parse_unknown_terms(raw) -> list[str]:
+    """Parse unknown_terms_json into a list of readable strings."""
+    if not raw:
+        return []
+    try:
+        if isinstance(raw, str):
+            terms = json.loads(raw)
+        else:
+            terms = raw
+        if isinstance(terms, list):
+            return [str(t) for t in terms]
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return []
 
 
 def _add_to_lexicon(post_id: str, current_label: str, project_dir: Path, state: State) -> dict | None:

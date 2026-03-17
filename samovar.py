@@ -552,6 +552,14 @@ def _run_classify(config: dict, lexicon: dict, project_dir: Path, state: State, 
         if not posts:
             break
 
+        # Parse metadata_json into metadata dict for each post
+        for post in posts:
+            if post.get("metadata_json"):
+                try:
+                    post["metadata"] = json.loads(post["metadata_json"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
         print(f"  Classifying batch of {len(posts)} posts...")
         result = spawn_agent(
             skill="classify",
