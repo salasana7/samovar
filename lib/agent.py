@@ -114,16 +114,37 @@ def _parse_output(raw: str, skill: str) -> dict:
         inner = outer.get("result", "")
         if isinstance(inner, dict):
             return inner
-        # result is a string containing JSON
+        # result is a string containing JSON — try direct parse first
         try:
             return json.loads(inner)
-        except json.JSONDecodeError as e:
-            raise RuntimeError(
-                f"Agent {skill} result is not valid JSON: {inner[:300]}"
-            ) from e
+        except json.JSONDecodeError:
+            pass
+        # Agent may have returned text + JSON mixed — extract the JSON object
+        extracted = _extract_json(inner)
+        if extracted is not None:
+            return extracted
+        raise RuntimeError(
+            f"Agent {skill} result contains no valid JSON: {inner[:300]}"
+        )
 
     # Direct JSON object
     if isinstance(outer, dict):
         return outer
 
     raise RuntimeError(f"Agent {skill} returned unexpected output format: {raw[:300]}")
+
+
+def _extract_json(text: str) -> dict | None:
+    """Try to extract a JSON object from text that may contain commentary."""
+    # Find the first { and try progressively larger substrings
+    start = text.find("{")
+    if start == -1:
+        return None
+    # Find the last } and try to parse
+    end = text.rfind("}")
+    if end == -1:
+        return None
+    try:
+        return json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
