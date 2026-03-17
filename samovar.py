@@ -77,64 +77,89 @@ def cmd_init(args):
 
 
 def _run_setup_agent(skill_text: str, project_dir: str):
-    """Run the setup agent as a multi-turn conversation with the user."""
-    first_message = True
+    """Run the setup agent as a harness-driven conversation.
 
-    # Initial prompt to kick off the conversation
-    prompt = "Start setting up this samovar project. Introduce yourself briefly and ask me your first question."
+    The harness controls the question flow. The agent handles
+    the smart parts: reading scripts, writing adapters, configuring YAML.
+    """
 
-    while True:
-        cmd = [
-            "claude", "-p", prompt,
-            "--allowedTools", "Read,Write,Edit,Bash,Glob,Grep",
-        ]
+    questions = [
+        ("What is this project about?", None),
+        (
+            "Do you have an existing collector script or dataset? "
+            "If so, give me the file path (or type 'skip').",
+            None,
+        ),
+        ("Your name (for the analyst field)?", None),
+        (
+            "Any domain knowledge to seed the lexicon? "
+            "Known slang, techniques, or past mistakes (or type 'skip').",
+            None,
+        ),
+    ]
 
-        if first_message:
-            cmd.extend(["--system-prompt", skill_text])
-            first_message = False
-        else:
-            cmd.append("--continue")
-
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, cwd=project_dir, timeout=300,
-        )
-
-        response = result.stdout.strip()
-        if not response:
-            print("  Setup agent returned no response.")
-            break
-
-        print(f"\n{response}\n")
-
-        # Check if the agent signaled it's done
-        if _setup_looks_done(response):
-            break
-
-        # Get user input
+    # Gather answers via simple prompts — no agent needed for questions
+    answers = {}
+    print()
+    for i, (question, _) in enumerate(questions):
+        print(f"  {question}")
         try:
-            user_input = input("> ").strip()
+            answer = input("  > ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n  Setup interrupted.\n")
-            break
+            return
+        if answer:
+            answers[i] = answer
+        print()
 
-        if not user_input:
-            continue
+    # Now hand everything to the agent in one shot to configure the project
+    print("  Configuring project...\n")
 
-        prompt = user_input
+    configure_prompt = _build_configure_prompt(answers)
+
+    result = subprocess.run(
+        [
+            "claude", "-p", configure_prompt,
+            "--system-prompt", skill_text,
+            "--allowedTools", "Read,Write,Edit,Bash,Glob,Grep",
+        ],
+        capture_output=True, text=True, cwd=project_dir, timeout=300,
+    )
+
+    response = result.stdout.strip()
+    if response:
+        print(f"{response}\n")
+    else:
+        print("  Setup agent returned no response. Check samovar.yaml manually.\n")
 
 
-def _setup_looks_done(response: str) -> bool:
-    """Check if the setup agent's response indicates setup is complete."""
-    done_signals = [
-        "samovar run",
-        "samovar collect",
-        "project is ready",
-        "setup is complete",
-        "you're all set",
-        "ready to start",
-    ]
-    response_lower = response.lower()
-    return any(signal in response_lower for signal in done_signals)
+def _build_configure_prompt(answers: dict) -> str:
+    """Build the agent's configuration prompt from gathered answers."""
+    parts = ["Configure this samovar project based on the following:\n"]
+
+    if 0 in answers:
+        parts.append(f"**Project description:** {answers[0]}")
+    if 2 in answers:
+        parts.append(f"**Analyst:** {answers[2]}")
+    if 1 in answers and answers[1].lower() != "skip":
+        parts.append(
+            f"**Data source:** {answers[1]} — Read this file's SOURCE CODE "
+            f"(do NOT execute it), understand what platforms/keywords/format "
+            f"it uses, write a collector adapter, and configure samovar.yaml "
+            f"based on what you learn from the code. Do NOT ask me about "
+            f"boards, keywords, or languages the script already defines."
+        )
+    else:
+        parts.append("**Data source:** None yet. Leave sources section empty.")
+    if 3 in answers and answers[3].lower() != "skip":
+        parts.append(f"**Lexicon seed:** {answers[3]}")
+
+    parts.append(
+        "\nEdit samovar.yaml and write any needed adapter scripts. "
+        "When done, tell me the project is ready and suggest running `samovar run`."
+    )
+
+    return "\n".join(parts)
 
 
 def cmd_status(args):
