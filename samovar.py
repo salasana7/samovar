@@ -543,7 +543,7 @@ def _run_collect(params: dict, config: dict, project_dir: Path, state: State):
 
 def _run_classify(config: dict, lexicon: dict, project_dir: Path, state: State, run_id: int):
     """Classify unclassified posts via the classify agent, batching as needed."""
-    batch_size = 15
+    batch_size = 10
     total_classified = 0
     total_flagged = 0
 
@@ -561,12 +561,23 @@ def _run_classify(config: dict, lexicon: dict, project_dir: Path, state: State, 
                     pass
             post["lexicon_matches"] = _match_lexicon(post.get("text", ""), lexicon)
 
+        # Send lexicon summary (corrections + term list) instead of full markdown
+        lexicon_summary = {}
+        for k, v in lexicon.items():
+            if k == "corrections":
+                lexicon_summary[k] = v  # corrections always sent in full
+            else:
+                # Just send term names — meanings are already in lexicon_matches per post
+                import re as _re
+                terms = [t.split("(")[0].strip() for t in _re.findall(r'\n## (.+)', v)]
+                lexicon_summary[k] = f"Known terms: {', '.join(terms)}" if terms else ""
+
         print(f"  Classifying batch of {len(posts)} posts...")
         result = spawn_agent(
             skill="classify",
             context={
                 "taxonomy": config.get("taxonomy", {}),
-                "lexicon": lexicon,
+                "lexicon": lexicon_summary,
                 "posts": posts,
             },
             project_dir=project_dir,
