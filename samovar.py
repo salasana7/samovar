@@ -683,15 +683,20 @@ def _run_review(config: dict, lexicon: dict, project_dir: Path, state: State, ru
         batch = all_findings[i : i + batch_size]
         print(f"  Reviewing batch of {len(batch)} findings ({i + 1}-{i + len(batch)} of {len(all_findings)})...")
 
-        result = spawn_agent(
-            skill="review",
-            context={
-                "findings": batch,
-                "lexicon": lexicon,
-                "taxonomy": config.get("taxonomy", {}),
-            },
-            project_dir=project_dir,
-        )
+        try:
+            result = spawn_agent(
+                skill="review",
+                context={
+                    "findings": batch,
+                    "lexicon": lexicon,
+                    "taxonomy": config.get("taxonomy", {}),
+                },
+                project_dir=project_dir,
+            )
+        except RuntimeError as e:
+            log.warning("Review batch failed: %s. Skipping to next batch.", e)
+            print(f"  Batch failed, skipping. Will retry on next run.")
+            continue
 
         reviews = result.get("reviews", [])
         if not reviews:
