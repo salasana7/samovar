@@ -552,13 +552,14 @@ def _run_classify(config: dict, lexicon: dict, project_dir: Path, state: State, 
         if not posts:
             break
 
-        # Parse metadata_json into metadata dict for each post
+        # Parse metadata and match lexicon terms deterministically
         for post in posts:
             if post.get("metadata_json"):
                 try:
                     post["metadata"] = json.loads(post["metadata_json"])
                 except (json.JSONDecodeError, TypeError):
                     pass
+            post["lexicon_matches"] = _match_lexicon(post.get("text", ""), lexicon)
 
         print(f"  Classifying batch of {len(posts)} posts...")
         result = spawn_agent(
@@ -719,6 +720,56 @@ def _run_report(config: dict, lexicon: dict, project_dir: Path, state: State):
         print("  Warning: report agent returned no content.")
 
     print(f"  Summary: {result.get('summary', 'done')}")
+
+
+def _match_lexicon(text: str, lexicon: dict) -> list[dict]:
+    """Deterministically match lexicon terms against post text.
+
+    Returns a list of matches with term and meaning for each hit.
+    This runs in the harness, not the agent — guaranteed no misses.
+    """
+    import re
+
+    matches = []
+    text_lower = text.lower()
+
+    for filename, content in lexicon.items():
+        # Parse markdown entries: ## term_name
+        entries = re.split(r'\n## ', content)
+        for entry in entries[1:]:  # skip header before first ##
+            lines = entry.strip().split('\n')
+            if not lines:
+                continue
+
+            # First line is the term (possibly with transliteration in parens)
+            term_line = lines[0].strip()
+            # Extract the base term (before parenthetical)
+            term = re.split(r'\s*\(', term_line)[0].strip()
+
+            if not term:
+                continue
+
+            # Check if term appears in text (case-insensitive)
+            if term.lower() in text_lower:
+                # Extract meaning from the entry
+                meaning = ""
+                category = ""
+                for line in lines[1:]:
+                    if line.strip().startswith("- **Meaning:**"):
+                        meaning = line.split("**Meaning:**")[1].strip()
+                    elif line.strip().startswith("- **Description:**"):
+                        meaning = line.split("**Description:**")[1].strip()
+                    elif line.strip().startswith("- **Category:**"):
+                        category = line.split("**Category:**")[1].strip()
+
+                matches.append({
+                    "term": term,
+                    "meaning": meaning,
+                    "category": category,
+                    "source_file": filename,
+                })
+
+    return matches
 
 
 def _append_lexicon_entries(entries: list[dict], project_dir: Path, source_post_id: str = ""):

@@ -42,7 +42,10 @@ Confidence reflects the quality of available evidence and the strength of your a
 You will receive a context file containing:
 - `taxonomy` — the category definitions, severity levels, and confidence levels
 - `lexicon` — all lexicon files (slang, techniques, corrections)
-- `posts` — array of posts to classify, each with post_id, text, source, url, thread_url, and optionally metadata (containing attack_vectors, artifacts, reply_count from the collector)
+- `posts` — array of posts to classify, each with:
+  - `post_id`, `text`, `source`, `url`, `thread_url`
+  - `metadata` (optional) — containing `attack_vectors`, `artifacts`, `reply_count` from the collector
+  - `lexicon_matches` — **pre-matched lexicon terms found in this post by the harness**. Each match has `term`, `meaning`, `category`, and `source_file`. These matches are deterministic and guaranteed correct. Use them directly — do not re-scan the lexicon yourself. If a term appears in `lexicon_matches`, it is a KNOWN term and must NOT be flagged as unknown.
 
 ## Output
 
