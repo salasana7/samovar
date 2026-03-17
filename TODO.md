@@ -37,3 +37,17 @@ Fix:
 The crawler extracts `artifacts` (github_links, telegram_links, paste_links, domain_links, api_keys) from every post. These are the leads the investigate agent should follow — rentry proxy pages, GitGud repos, HuggingFace Spaces. Currently not passed to the agent.
 
 **Files:** `samovar.py` (`_run_investigate`), `skills/investigate.md`
+
+### 6. Iterative classify→checkpoint cycles with ramping batch size
+Currently the coordinator plans one big classify (all unclassified posts) then one checkpoint at the end. The lexicon is empty for the entire classify run, so every batch is flying blind.
+
+Better workflow: classify a small batch → checkpoint → analyst reviews flagged terms → lexicon updates → classify a larger batch with the improved lexicon → repeat. Each cycle benefits from the previous one's corrections.
+
+Batch size ramp: 50 → 100 → 200. First batch is small because everything is unknown and the lexicon is empty. By the third cycle most terms are known so larger batches are fine — faster and higher confidence.
+
+Fix:
+- `skills/coordinator.md`: teach the coordinator to plan iterative classify→checkpoint cycles instead of one classify→one checkpoint
+- `samovar.py` (`_run_classify`): support configurable batch size, or let the coordinator specify it per step
+- The coordinator should check lexicon entry count and flagged item count to decide when to ramp up
+
+**Files:** `skills/coordinator.md`, `samovar.py`
