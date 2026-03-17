@@ -95,7 +95,7 @@ def _run_setup_agent(skill_text: str, project_dir: str):
             cmd.append("--continue")
 
         result = subprocess.run(
-            cmd, capture_output=True, text=True, cwd=project_dir, timeout=120,
+            cmd, capture_output=True, text=True, cwd=project_dir, timeout=300,
         )
 
         response = result.stdout.strip()
