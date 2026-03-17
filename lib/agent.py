@@ -73,10 +73,10 @@ def spawn_agent(
             capture_output=True,
             text=True,
             cwd=str(project_dir),
-            timeout=300,
+            timeout=600,
         )
     except subprocess.TimeoutExpired:
-        log.error("Agent %s timed out after 300s", skill)
+        log.error("Agent %s timed out after 600s", skill)
         if retry:
             log.info("Retrying %s agent once...", skill)
             return spawn_agent(

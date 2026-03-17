@@ -543,7 +543,7 @@ def _run_collect(params: dict, config: dict, project_dir: Path, state: State):
 
 def _run_classify(config: dict, lexicon: dict, project_dir: Path, state: State, run_id: int):
     """Classify unclassified posts via the classify agent, batching as needed."""
-    batch_size = 50
+    batch_size = 15
     total_classified = 0
     total_flagged = 0
 
