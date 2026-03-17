@@ -92,8 +92,9 @@ def _run_setup_agent(skill_text: str, project_dir: str):
         ),
         ("Your name (for the analyst field)?", None),
         (
-            "Any domain knowledge to seed the lexicon? "
-            "Known slang, techniques, or past mistakes (or type 'skip').",
+            "Do you already know any slang or techniques specific to this domain? "
+            "If so, list them here. Otherwise type 'skip' — the lexicon "
+            "grows during analysis.",
             None,
         ),
     ]

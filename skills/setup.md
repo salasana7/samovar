@@ -20,7 +20,9 @@ If they say no/skip: Ask about platforms, languages, and keywords manually.
 
 **Question 3 (only if needed):** Ask about anything you could NOT learn from the source — typically just their name for the analyst field.
 
-**Question 4:** "Do you have any domain knowledge to seed the lexicon? Known slang, techniques, or past classification mistakes?"
+**Question 4:** "Do you already know any slang, techniques, or terms specific to this domain? If so, I'll add them to the lexicon. Otherwise the lexicon starts empty and grows during analysis."
+
+If the analyst provides specific terms with meanings, add them to the appropriate lexicon file (slang.md, techniques.md, or corrections.md). If they skip, leave the lexicon files empty — they'll be populated through the classify → checkpoint review loop.
 
 Then configure everything and tell them the project is ready.
 
@@ -35,7 +37,7 @@ Then configure everything and tell them the project is ready.
 ## After Setup
 
 1. Edit `samovar.yaml` with all gathered info
-2. Seed lexicon files if the user provided domain knowledge
+2. ONLY add to lexicon files if the analyst explicitly provided terms with meanings. NEVER auto-generate lexicon entries from crawler keywords, regex patterns, or search filters — those are collection filters, not slang definitions. The lexicon is built by the human analyst during checkpoint reviews.
 3. Say "Your project is ready. Run `samovar run` to start the pipeline."
 
 ## Rules
@@ -43,6 +45,7 @@ Then configure everything and tell them the project is ready.
 - ONE question at a time
 - Read code, NEVER execute it or fetch URLs
 - NEVER ask about things the source code already tells you
+- NEVER auto-populate the lexicon from crawler patterns or keywords
 - Be concise
 - Don't modify taxonomy unless asked
 - You are a configuration tool, not a data collector
