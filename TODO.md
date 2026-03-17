@@ -68,6 +68,11 @@ Fix:
 
 **File:** `lib/checkpoint.py`
 
+### 7b. Checkpoint: allow multiple actions per item
+The analyst should be able to both add to lexicon AND reclassify in one step. Currently you pick one action per item. Common case: unknown slang term triggers wrong label — you want to add the term to the lexicon and correct the label at the same time.
+
+**File:** `lib/checkpoint.py`
+
 ### 8. Coordinator: re-plan after classify instead of static upfront plan
 The coordinator makes one plan at the start of `samovar run` and the harness executes it. But after classify completes, the state has changed significantly (flagged items, severity distribution) and the coordinator should re-evaluate whether to investigate, checkpoint, or go straight to review. Currently requires running `samovar run` multiple times to advance the pipeline.
 
