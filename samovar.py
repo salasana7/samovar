@@ -372,6 +372,21 @@ def cmd_review(args):
     state.close()
 
 
+def cmd_validate(args):
+    """Run adversarial review on unreviewed medium/high findings (AI, bypasses coordinator)."""
+    project_dir = find_project_dir()
+    config = load_config(project_dir)
+    lexicon = load_lexicon(project_dir)
+    ensure_project_dirs(project_dir)
+    state = State(project_dir)
+    run_id = state.start_run({"direct": "validate"})
+
+    _run_review(config, lexicon, project_dir, state, run_id)
+
+    state.finish_run(run_id)
+    state.close()
+
+
 def cmd_report(args):
     """Generate report only (AI, bypasses coordinator)."""
     project_dir = find_project_dir()
@@ -841,6 +856,9 @@ def build_parser() -> argparse.ArgumentParser:
     # review
     sub.add_parser("review", help="interactive human review")
 
+    # validate
+    sub.add_parser("validate", help="adversarial review of medium/high findings")
+
     # report
     sub.add_parser("report", help="generate threat intel report")
 
@@ -862,6 +880,7 @@ def main():
         "classify": cmd_classify,
         "investigate": cmd_investigate,
         "review": cmd_review,
+        "validate": cmd_validate,
         "report": cmd_report,
     }
 
