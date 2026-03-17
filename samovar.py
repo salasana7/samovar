@@ -670,27 +670,37 @@ def _run_investigate(
 
 
 def _run_review(config: dict, lexicon: dict, project_dir: Path, state: State, run_id: int):
-    """Run adversarial review on unreviewed medium/high findings."""
-    findings = state.get_unreviewed_findings()
-    if not findings:
+    """Run adversarial review on unreviewed medium/high findings, batched."""
+    all_findings = state.get_unreviewed_findings()
+    if not all_findings:
         print("  No unreviewed findings.")
         return
 
-    print(f"  Reviewing {len(findings)} findings...")
-    result = spawn_agent(
-        skill="review",
-        context={
-            "findings": findings,
-            "lexicon": lexicon,
-            "taxonomy": config.get("taxonomy", {}),
-        },
-        project_dir=project_dir,
-    )
+    batch_size = 15
+    total_reviewed = 0
 
-    reviews = result.get("reviews", [])
-    if reviews:
+    for i in range(0, len(all_findings), batch_size):
+        batch = all_findings[i : i + batch_size]
+        print(f"  Reviewing batch of {len(batch)} findings ({i + 1}-{i + len(batch)} of {len(all_findings)})...")
+
+        result = spawn_agent(
+            skill="review",
+            context={
+                "findings": batch,
+                "lexicon": lexicon,
+                "taxonomy": config.get("taxonomy", {}),
+            },
+            project_dir=project_dir,
+        )
+
+        reviews = result.get("reviews", [])
+        if not reviews:
+            log.warning("Review agent returned no reviews for batch")
+            continue
+
         state.add_reviews(reviews, run_id)
-        print(f"  Review: {result.get('summary', f'{len(reviews)} reviewed')}")
+        total_reviewed += len(reviews)
+        print(f"  Batch: {result.get('summary', f'{len(reviews)} reviewed')}")
 
         escalated = []
         for r in reviews:
