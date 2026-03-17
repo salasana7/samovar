@@ -55,3 +55,22 @@ Fix:
 - `samovar.py`: expose flag rate in `state.summary()` so the coordinator has the data to decide
 
 **Files:** `skills/coordinator.md`, `samovar.py` (`state.summary()`)
+
+### 7. Checkpoint UX: separate review types and show more context
+The checkpoint currently dumps ALL flagged items (240!) in one pile — low confidence, unknown terms, medium/high severity all mixed together. Too noisy to review effectively.
+
+Fix:
+- Separate into review queues: (1) unknown terms to add to lexicon, (2) low-confidence classifications needing analyst judgment, (3) high-confidence items should NOT appear in checkpoint at all
+- Show the post URL so the analyst can verify the source
+- Show the full Russian text (currently truncated at 200 chars)
+- Decode unknown_terms_json properly — currently showing raw unicode escapes instead of Cyrillic
+- Show the evidence_en alongside the original text so the analyst can verify the translation/context
+
+**File:** `lib/checkpoint.py`
+
+### 8. Coordinator: re-plan after classify instead of static upfront plan
+The coordinator makes one plan at the start of `samovar run` and the harness executes it. But after classify completes, the state has changed significantly (flagged items, severity distribution) and the coordinator should re-evaluate whether to investigate, checkpoint, or go straight to review. Currently requires running `samovar run` multiple times to advance the pipeline.
+
+Fix: either re-plan mid-run after major steps, or document that multiple `samovar run` calls is the expected workflow.
+
+**Files:** `samovar.py` (`cmd_run`), `skills/coordinator.md`
