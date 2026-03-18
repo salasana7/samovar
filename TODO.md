@@ -56,6 +56,11 @@ Fix:
 
 **Files:** `skills/coordinator.md`, `samovar.py` (`state.summary()`)
 
+### 9. Custom investigation subagent with Russian cultural context
+The investigate agent should be customizable per project with domain-specific expertise. For dvach-claude, this means a subagent persona with deep knowledge of Russian imageboard culture, slang patterns, community dynamics, and how to interpret irony/sarcasm/nihilistic humor in context. The analyst's Russian cultural expertise should be encoded into the agent's skill file so it investigates like a native speaker, not a translator.
+
+**Files:** `skills/investigate.md`, potentially a project-level skill override system
+
 ### 7. Checkpoint UX: separate review types and show more context
 The checkpoint currently dumps ALL flagged items (240!) in one pile — low confidence, unknown terms, medium/high severity all mixed together. Too noisy to review effectively.
 
