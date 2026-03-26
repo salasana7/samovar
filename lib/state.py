@@ -91,7 +91,20 @@ class State:
 
     def _init_schema(self):
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self):
+        """Ensure one classification per post — deduplicate and add unique index."""
+        self.conn.execute(
+            """DELETE FROM classifications WHERE id NOT IN (
+                   SELECT MAX(id) FROM classifications GROUP BY post_id
+               )"""
+        )
+        self.conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_classifications_post_id "
+            "ON classifications(post_id)"
+        )
 
     def close(self):
         self.conn.close()
@@ -158,7 +171,7 @@ class State:
     def add_classifications(self, classifications: list[dict], run_id: int):
         for c in classifications:
             self.conn.execute(
-                """INSERT INTO classifications
+                """INSERT OR REPLACE INTO classifications
                    (post_id, label, severity, confidence, evidence_en,
                     unknown_terms_json, run_id, classified_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -203,21 +216,13 @@ class State:
     ):
         if severity:
             self.conn.execute(
-                """UPDATE classifications
-                   SET label = ?, confidence = ?, severity = ?
-                   WHERE post_id = ? AND id = (
-                       SELECT MAX(id) FROM classifications WHERE post_id = ?
-                   )""",
-                (label, confidence, severity, post_id, post_id),
+                "UPDATE classifications SET label = ?, confidence = ?, severity = ? WHERE post_id = ?",
+                (label, confidence, severity, post_id),
             )
         else:
             self.conn.execute(
-                """UPDATE classifications
-                   SET label = ?, confidence = ?
-                   WHERE post_id = ? AND id = (
-                       SELECT MAX(id) FROM classifications WHERE post_id = ?
-                   )""",
-                (label, confidence, post_id, post_id),
+                "UPDATE classifications SET label = ?, confidence = ? WHERE post_id = ?",
+                (label, confidence, post_id),
             )
         self.conn.commit()
 
