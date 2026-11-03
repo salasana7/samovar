@@ -22,7 +22,7 @@ For each finding:
 
 ## Input
 
-You will receive a context file containing:
+You will receive JSON context on stdin containing:
 - `findings` — array of classified items (post_id, text, label, severity, confidence, evidence_en)
 - `lexicon` — all lexicon files (especially corrections.md)
 - `taxonomy` — the category definitions
@@ -65,3 +65,8 @@ Return a single JSON object:
   "summary": "3 reviewed: 1 confirmed, 1 downgraded, 0 reclassified, 0 dismissed, 1 escalated"
 }
 ```
+
+
+## Source identity and coverage
+
+Source post IDs are opaque strings. Copy each ID exactly as supplied, including any source prefix; never shorten, split, normalize, or invent an ID. When asked to classify or review a set of posts, return every requested post exactly once and no other posts.

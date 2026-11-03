@@ -23,7 +23,7 @@ You may ONLY use these actions in your plan:
 
 ## Input
 
-You will receive a context file containing:
+You will receive JSON context on stdin containing:
 - `state` — summary of the project state (post counts, classification status, etc.)
 - `config` — the project's samovar.yaml configuration
 - `lexicon_summary` — current lexicon contents (slang, techniques, corrections)
@@ -52,3 +52,8 @@ If nothing needs doing:
   "steps": []
 }
 ```
+
+
+## Source identity and coverage
+
+Source post IDs are opaque strings. Copy each ID exactly as supplied, including any source prefix; never shorten, split, normalize, or invent an ID. When asked to classify or review a set of posts, return every requested post exactly once and no other posts.

@@ -49,3 +49,8 @@ Then configure everything and tell them the project is ready.
 - Be concise
 - Don't modify taxonomy unless asked
 - You are a configuration tool, not a data collector
+
+
+## Source identity and coverage
+
+Source post IDs are opaque strings. Copy each ID exactly as supplied, including any source prefix; never shorten, split, normalize, or invent an ID. When asked to classify or review a set of posts, return every requested post exactly once and no other posts.
