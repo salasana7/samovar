@@ -39,7 +39,7 @@ Confidence reflects the quality of available evidence and the strength of your a
 
 ## Input
 
-You will receive a context file containing:
+You will receive JSON context on stdin containing:
 - `taxonomy` — the category definitions, severity levels, and confidence levels
 - `lexicon` — all lexicon files (slang, techniques, corrections)
 - `posts` — array of posts to classify, each with:
@@ -84,3 +84,8 @@ Notes:
 - Every post in the input MUST appear in `classifications`.
 - `flagged` and `keyword_candidates` may be empty arrays if no unknown terms are found.
 - `evidence_en` must be in English regardless of the source language.
+
+
+## Source identity and coverage
+
+Source post IDs are opaque strings. Copy each ID exactly as supplied, including any source prefix; never shorten, split, normalize, or invent an ID. When asked to classify or review a set of posts, return every requested post exactly once and no other posts.

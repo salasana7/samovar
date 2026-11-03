@@ -48,7 +48,7 @@ Generate a markdown report with these sections:
 
 ## Input
 
-You will receive a context file containing:
+You will receive JSON context on stdin containing:
 - `findings` — array of reviewed findings with their review status, labels, severity, evidence
 - `lexicon` — all lexicon files (for context on terminology)
 - `config` — project configuration (for scope and description)
@@ -70,3 +70,12 @@ Return a single JSON object. The harness writes the file — do NOT use the Writ
   }
 }
 ```
+
+
+## Source identity and coverage
+
+Source post IDs are opaque strings. Copy each ID exactly as supplied, including any source prefix; never shorten, split, normalize, or invent an ID. When asked to classify or review a set of posts, return every requested post exactly once and no other posts.
+
+## Unresolved escalations and review status
+
+Escalated posts are unresolved items that need analyst attention, not confirmed findings. Include every escalation in a clearly marked **Urgent / unresolved analyst attention** section, retaining the exact post ID and explaining the unresolved concern. Never describe an escalation as confirmed, validated, or independently established evidence. Represent each review status accurately, including downgraded findings, and preserve the distinction between source claims, analyst uncertainty, and verified evidence.

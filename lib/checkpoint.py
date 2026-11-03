@@ -7,7 +7,18 @@ from pathlib import Path
 from lib.state import State
 
 
+class CheckpointInterrupted(RuntimeError):
+    """Human review could not complete; the pipeline must not continue."""
+
+
 def run_checkpoint(flagged_items: list[dict], state: State, project_dir: Path) -> list[dict]:
+    try:
+        return _run_checkpoint(flagged_items, state, project_dir)
+    except (EOFError, KeyboardInterrupt) as exc:
+        raise CheckpointInterrupted("Human review interrupted or unavailable; remaining pipeline steps were not run") from exc
+
+
+def _run_checkpoint(flagged_items: list[dict], state: State, project_dir: Path) -> list[dict]:
     """Present flagged items for human review, grouped by type."""
     if not flagged_items:
         print("\n  No items to review.\n")
@@ -16,10 +27,15 @@ def run_checkpoint(flagged_items: list[dict], state: State, project_dir: Path) -
     # Separate into review queues
     unknown_term_items = []
     low_confidence_items = []
+    escalated_items = []
 
     for item in flagged_items:
         terms = _parse_unknown_terms(item.get("unknown_terms_json"))
         if terms:
+            item["_parsed_terms"] = terms
+        if item.get("escalation_id") is not None:
+            escalated_items.append(item)
+        elif terms:
             item["_parsed_terms"] = terms
             unknown_term_items.append(item)
         elif item.get("confidence") == "low":
@@ -27,6 +43,10 @@ def run_checkpoint(flagged_items: list[dict], state: State, project_dir: Path) -
         # High confidence items don't appear in checkpoint
 
     corrections = []
+
+    if escalated_items:
+        print(f"\n  ESCALATED: {len(escalated_items)} posts require analyst attention\n")
+        corrections += _review_items(escalated_items, state, project_dir)
 
     # Queue 1: Unknown terms
     if unknown_term_items:
@@ -67,6 +87,8 @@ def _review_items(items: list[dict], state: State, project_dir: Path) -> list[di
         print(f"           ───────────────────────────────────────")
         print(f"           {text}")
         print(f"           ───────────────────────────────────────")
+        if item.get("escalation_reason"):
+            print(f"           Escalation: {item['escalation_reason']}")
         if evidence:
             print(f"           Evidence: {evidence}")
         if parsed_terms:
@@ -75,24 +97,21 @@ def _review_items(items: list[dict], state: State, project_dir: Path) -> list[di
         print("           (a) Accept    (r) Reclassify    (l) Add to lexicon    (s) Skip    (q) Quit")
         print()
 
-        try:
-            choice = _prompt("> ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            print("\n  Review interrupted.\n")
-            break
+        choice = _prompt("> ").strip().lower()
 
         if choice == "a":
-            state.update_classification(post_id, label, "high")
-            state.add_checkpoint(post_id, "accept", {"label": label})
+            state.apply_checkpoint(post_id, "accept", label, {"label": label})
             corrections.append({"post_id": post_id, "action": "accept", "label": label})
             print("  ✓ Accepted\n")
 
         elif choice == "r":
+            if item.get("label") is None:
+                print("  — Classify this post before reclassifying it. Escalation remains pending.\n")
+                continue
             new_label = _prompt("  New label: ").strip()
             if new_label:
-                state.update_classification(post_id, new_label, "high")
-                state.add_checkpoint(
-                    post_id, "reclassify", {"old_label": label, "new_label": new_label}
+                state.apply_checkpoint(
+                    post_id, "reclassify", new_label, {"old_label": label, "new_label": new_label}
                 )
                 corrections.append(
                     {"post_id": post_id, "action": "reclassify", "old_label": label, "new_label": new_label}
@@ -107,8 +126,7 @@ def _review_items(items: list[dict], state: State, project_dir: Path) -> list[di
                 corrections.append(correction)
 
         elif choice == "q":
-            print("  Review ended by user.\n")
-            break
+            raise CheckpointInterrupted("Human review cancelled; remaining pipeline steps were not run")
 
         else:
             print("  — Skipped\n")

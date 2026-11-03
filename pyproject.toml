@@ -18,7 +18,8 @@ samovar = "samovar:main"
 py-modules = ["samovar"]
 
 [tool.setuptools.packages.find]
-include = ["lib*"]
+include = ["lib*", "samovar_resources"]
+namespaces = false
 
 [tool.setuptools.package-data]
-"*" = ["skills/*.md", "templates/**/*"]
+samovar_resources = ["skills/*.md", "templates/project/*", "templates/project/.gitignore", "templates/project/lexicon/*.md", "templates/project/sources/*.py"]

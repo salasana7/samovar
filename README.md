@@ -1,248 +1,244 @@
 # Samovar
 
-AI-powered OSINT research harness for analyzing Russian-language sources. Orchestrates specialized agents to collect, classify, investigate, review, and report on threat intelligence — with a human analyst in the loop.
+Samovar is a command-line research tool for analyzing Russian-language open-source material. It connects Python collectors, model-assisted classification and investigation, and analyst review in a local project directory.
 
-Built for processing Russian-language data from any source — forum threads, Telegram channels, social media, or raw data dumps.
+Each project has its own sources, taxonomy, lexicon, SQLite database, and reports. The default taxonomy covers AI misuse and safety threats; you can adapt it in `samovar.yaml` for a different research question.
 
-## Why
+Samovar is an early-stage tool for analyst-led research. Model output is an assessment to check against the source material, not independent verification.
 
-Russian-language internet slang evolves fast, has almost no dictionary coverage, and is full of irony that defeats keyword-based analysis. Samovar solves this with a **lexicon feedback loop**: agents flag unknown terms during classification, discover new ones during investigation, and the analyst validates and corrects at checkpoints. Each project builds its own lexicon over time — the harness ships empty templates, the project's lexicon grows through both automated discovery and analyst review.
+## Workflow
 
-The tool fills a gap in the Russian OSINT ecosystem: there are good per-platform collection tools (Telethon, vk_api, imageboard APIs), but nothing that orchestrates cross-source analysis with structured classification, adversarial review, and human checkpoints.
+1. **Collect** posts from configured Python scripts that emit JSON Lines.
+2. **Classify** posts using the project taxonomy and lexicon.
+3. **Review** uncertain classifications, unfamiliar terms, and escalations at an interactive checkpoint.
+4. **Investigate** selected posts for additional context.
+5. **Validate** medium- and high-severity findings with a separate model review.
+6. **Report** the current reviewed findings, with unresolved escalations identified separately.
 
-## Architecture
+You can run each step directly. `samovar run` asks a coordinator model to propose a plan, validates that plan, and executes it. The plan depends on the current project state; it is not a fixed sequence of every step.
 
-Samovar is a **two-layer system**:
+## Installation
 
-```
-┌──────────────────────────────────────────────────────────┐
-│  HARNESS (samovar.py)                                    │
-│                                                          │
-│  Python CLI that reads project state, spawns agents,     │
-│  executes plans, and manages human review checkpoints.   │
-│  The harness is deterministic — it doesn't decide what   │
-│  to do, it executes the coordinator's plan and manages   │
-│  I/O between agents.                                     │
-│                                                          │
-│  All file writes and state mutations go through the      │
-│  harness. Agents never write to disk directly.           │
-├──────────────────────────────────────────────────────────┤
-│  AGENTS (Claude Code sessions via `claude -p`)           │
-│                                                          │
-│  One-shot sessions, each with a skill file, restricted   │
-│  tool access, and isolated sessions.                      │
-│                                                          │
-│  ┌─────────────┐  Configures new projects interactively,  │
-│  │ Setup        │  reads existing scripts/data, writes    │
-│  └─────────────┘  collector adapters                      │
-│  ┌─────────────┐  Reads state, produces a plan           │
-│  │ Coordinator  │  (which steps to run and in what order) │
-│  └─────────────┘                                         │
-│  ┌─────────────┐  Labels posts using taxonomy + lexicon  │
-│  │ Classifier   │  Flags unknown slang for human review   │
-│  └─────────────┘                                         │
-│  ┌─────────────┐  Fetches thread context via curl,       │
-│  │ Investigator │  re-evaluates flagged classifications   │
-│  └─────────────┘                                         │
-│  ┌─────────────┐  Adversarial pass — catches false       │
-│  │ Reviewer     │  positives, slang errors, severity      │
-│  └─────────────┘  miscalibration                         │
-│  ┌─────────────┐  Generates structured threat intel      │
-│  │ Reporter     │  report from validated findings         │
-│  └─────────────┘                                         │
-└──────────────────────────────────────────────────────────┘
-```
+Requirements:
 
-## Pipeline
+- Python 3.11 or later.
+- Git for project initialization.
+- Claude Code, Codex CLI, or both, installed and authenticated before running model-assisted commands.
 
-```
-Collect → Classify → Checkpoint → Investigate → Review → Report
-   ↑         ↑           ↑            ↑           ↑        ↑
- script      AI        human          AI          AI       AI
-```
-
-The **coordinator agent** plans which steps to run based on current project state. The harness executes the plan, spawning worker agents for AI steps and prompting the analyst at checkpoints. Direct commands (`samovar classify`, `samovar report`, etc.) bypass the coordinator for one-off tasks.
-
-## Requirements
-
-- Python 3.11+
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude` command available)
-- PyYAML (`pip install pyyaml`)
-
-## Setup
+From this repository:
 
 ```bash
-git clone https://github.com/salasana7/samovar.git
-cd samovar
-pip install .
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install .
+samovar --help
 ```
 
-### Create a project
+The Python package installs PyYAML and includes the project templates and agent instructions. Agent CLIs and their service access are separate requirements.
+
+## Choose an agent backend
+
+Samovar supports Claude Code and Codex CLI. Authenticate each CLI you intend to use through its own login flow:
+
+```bash
+claude auth login
+codex login
+```
+
+Claude is the default. To select a backend for one command, put `--agent` before the command:
+
+```bash
+samovar --agent codex classify
+samovar --agent claude validate
+```
+
+For persistent routing, add an `agents` section to `samovar.yaml`:
+
+```yaml
+agents:
+  default: claude
+  review: codex
+```
+
+In this example, Claude handles most steps and Codex handles the model review invoked by `samovar validate`. Other skill names are `coordinator`, `classify`, `investigate`, and `report`. To select specific models, set `agents.models.claude` or `agents.models.codex` to a model name available to your account; otherwise the CLI chooses its default. A command-line `--agent` selection overrides project routing for that command.
+
+Each step uses one backend. Configuring both does not run both models on every item or combine their answers. Samovar uses the CLIs' existing authentication independently and does not copy credentials between them. Account access, model availability, usage limits, and billing depend on the selected provider.
+
+Use trusted, current official CLI versions. Samovar requires safety flags, including Claude's `--safe-mode`, and fails if they are unsupported rather than retrying with fewer restrictions. Managed administrator policies still apply.
+
+### Codex global instructions
+
+Samovar refuses to launch Codex if its configuration directory contains `AGENTS.md` or `AGENTS.override.md`. It checks file metadata, not their contents. You can continue using your existing Codex login when that directory has no global instruction files.
+
+If this check blocks analysis, use a dedicated configuration directory and authenticate there. For example, in a shell where `$HOME/.samovar-codex` is a new, empty directory:
+
+```bash
+export CODEX_HOME="$HOME/.samovar-codex"
+mkdir -p "$CODEX_HOME"
+codex login
+samovar classify --agent codex
+```
+
+Keep the same `CODEX_HOME` set when running Samovar. The directory must not contain global instruction files. Leave your existing instructions and credentials in place; this creates a separate CLI configuration and login.
+
+## Create a project
 
 ```bash
 samovar init my-research
+cd my-research
 ```
 
-This scaffolds the project, initializes a git repo, and launches the setup flow:
+Setup is a local questionnaire, with no model call. It records the research description and analyst name in `samovar.yaml`, saves an optional collector or dataset path as a hint, and appends supplied terminology to `lexicon/corrections.md` as analyst notes. It does not read the supplied path, generate adapters, or execute a collector.
 
-![samovar init](https://raw.githubusercontent.com/salasana7/samovar/main/docs/init-screenshot.png)
+Configure sources yourself before collecting data. The bundled collector is a template, not a working integration with Telegram, VK, or an imageboard. Review the configuration and any collector code before running it.
 
-The setup flow asks four questions, then hands everything to a **setup agent** that does the configuration:
-
-1. What is this project about?
-2. Do you have an existing collector script or dataset? (file path or skip)
-3. Your name (analyst)
-4. Any known domain-specific slang or techniques? (or skip)
-
-The agent reads your collector script's source code (never executes it), extracts platforms, keywords, and data format, writes a JSONL adapter, and configures `samovar.yaml` — all in one shot. The lexicon starts empty and grows through the analyst review loop during analysis.
-
-No manual YAML editing required.
-
-### Project structure
-
-After setup, your project looks like:
-
-```
-my-research/
-├── samovar.yaml          # Scope, taxonomy, sources, keywords
-├── lexicon/
-│   ├── slang.md          # Slang dictionary (grows during analysis)
-│   ├── techniques.md     # Known TTPs
-│   └── corrections.md    # Past classification mistakes
-├── sources/              # Collector scripts (generated or imported)
-├── data/                 # Raw collected data (gitignored)
-├── reports/              # Generated threat intel reports
-└── .samovar/             # Harness state DB (gitignored)
-```
-
-### Run
+To make Codex the new project's default backend:
 
 ```bash
-# Full pipeline — coordinator plans, harness executes
+samovar --agent codex init my-codex-research
+```
+
+Run subsequent commands from the project directory or one of its subdirectories.
+
+```bash
+samovar collect              # Collect from all configured sources
+samovar classify             # Classify posts that have no classification
+samovar review               # Resolve items that need human judgment
+samovar validate             # Model review of medium/high-severity findings
+samovar review               # Handle any new escalations
+samovar report               # Write a Markdown report
+samovar status               # Show counts, pending work, and the last run
+```
+
+`review` and `validate` are different: `review` is the interactive analyst checkpoint; `validate` runs the review agent. Neither command establishes that a source's claims are true.
+
+To let the coordinator choose the next steps:
+
+```bash
 samovar run
-
-# Or run individual steps
-samovar collect               # run crawlers
-samovar classify              # AI classification
-samovar review                # interactive analyst review
-samovar investigate <post_id> # deep-dive on a specific post
-samovar report                # generate threat intel report
-samovar status                # show project state
 ```
 
-## Adding sources
+## Configure a source
 
-Samovar is source-agnostic. Each source is a script that outputs **one JSON object per line** to stdout:
-
-```json
-{"post_id": "12345", "source": "platform_name", "source_language": "ru", "text": "post content", "url": "https://...", "thread_url": "https://...", "source_ts": "2026-03-15T10:00:00Z"}
-```
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `post_id` | yes | Unique identifier within the source |
-| `source` | yes | Source name (matches key in `samovar.yaml`) |
-| `text` | yes | Post content |
-| `source_language` | no | ISO 639-1 language code (e.g., `ru`) |
-| `url` | no | Direct URL to the post |
-| `thread_url` | no | URL to the containing thread (used by investigate) |
-| `source_ts` | no | Original post timestamp (ISO 8601) |
-| `metadata` | no | Any additional source-specific data (JSON object) |
-
-Your collector can be anything — a Python crawler, a database export script, a CSV parser. The harness just runs it and reads stdout.
-
-### Example configurations
+Each source in `samovar.yaml` names a Python script and its arguments:
 
 ```yaml
 sources:
-  # Imageboard crawler
-  dvach:
-    script: sources/dvach/crawl.py
-    args: ["--boards", "ai,pr"]
-
-  # Telegram channel export (e.g., via Telethon)
-  telegram:
-    script: sources/telegram/export.py
-    args: ["--channels", "@channel1,@channel2"]
-
-  # VK group scraper (e.g., via vk_api)
-  vk:
-    script: sources/vk/crawl.py
-    args: ["--groups", "group1"]
-
-  # Static file import
   archive:
     script: sources/import_jsonl.py
-    args: ["data/archive_dump.jsonl"]
+    args: ["data/archive.jsonl"]
 ```
 
-A reference collector template is included at `sources/collector_template.py` after `samovar init`.
+This example assumes you have written `sources/import_jsonl.py`. Start from `sources/collector_template.py` in a new project. A collector can read an export, call an API, or query a database, provided it emits one JSON object per line to standard output. Send logs and progress messages to standard error.
 
-### How investigate works across sources
-
-The investigate agent doesn't use your collector scripts. It takes the `thread_url` from the post metadata and fetches the thread directly via `curl`. Any platform with URL-accessible threads works without additional tooling.
-
-## Lexicon feedback loop
-
-When agents encounter unknown Russian slang or low-confidence classifications, the harness flags them for human review:
-
-```
-══════════════════════════════════════════════════
- REVIEW: 3 items flagged
-══════════════════════════════════════════════════
-
-[1/3] Post #1412
-      Label: jailbreak_or_bypass (confidence: low)
-      Text: "используй X чтобы убрать..."
-      Reason: "Unknown term 'X'"
-
-      (a) Accept    (r) Reclassify    (l) Add to lexicon    (s) Skip
-
-> l
-  Term: X
-  Meaning: jailbreak technique, removes safety alignment
-  File: (1) slang  (2) techniques  (3) corrections
-  > 1
-
-  ✓ Added to lexicon/slang.md
+```json
+{"post_id":"12345","source":"archive","source_language":"ru","text":"Example source text","url":"https://example.org/posts/12345","thread_url":"https://example.org/threads/42","source_ts":"2026-03-15T10:00:00Z"}
 ```
 
-Corrections persist across runs. Classification quality improves over time as the lexicon grows.
+| Field | Requirement | Meaning |
+| --- | --- | --- |
+| `post_id` | Required | Nonempty source-local identifier, as a string or integer. |
+| `text` | Required | Post content, as a string. |
+| `source` | Optional | Must match the configured source name when supplied. Otherwise the harness fills it in. |
+| `source_language` | Optional | Language code, such as `ru`. |
+| `url` | Optional | Direct link to the post. |
+| `thread_url` | Optional | Link to surrounding discussion for investigation. |
+| `source_ts` | Optional | Original timestamp, preferably ISO 8601. |
+| `metadata` | Optional | Additional source-specific fields, as a JSON object. |
 
-## Analytic methodology
+```bash
+samovar collect archive
+```
 
-Classification uses a confidence framework aligned with intelligence community standards (ICD 203):
+Collectors run with the same Python interpreter as Samovar, from the project directory, with a five-minute timeout. The harness checks the entire output before storing the batch. A nonzero exit, malformed JSON, or invalid record fails collection instead of silently importing only part of it.
 
-- **High** — direct, unambiguous evidence with corroborating signals
-- **Medium** — well-supported with some inferential reasoning
-- **Low** — fragmentary or ambiguous evidence requiring further investigation
+Posts are identified by the pair of source name and source-local ID. Repeated collection of the same pair does not create another post or update its existing text. Identical IDs from different sources remain separate.
 
-The adversarial review agent challenges every medium/high severity finding before it enters a report, checking for false positives, slang misinterpretation, evidence quality, and severity calibration. Findings can be escalated for immediate analyst attention when time-sensitive.
+### Investigate a post
+
+```bash
+samovar investigate 12345
+```
+
+A source-local ID works when it identifies exactly one stored post. When sources share an ID, use the full internal ID shown in the review output, including shell quotes:
+
+```bash
+samovar investigate 'source:["archive","12345"]'
+```
+
+Investigation uses the selected post and up to 100 already-collected posts from the same source and thread URL. Agents do not fetch thread URLs or run collectors themselves. A `thread_url` records a source reference; it does not guarantee that the discussion was retrieved. If the available material is insufficient, the investigation should request analyst review. Arrange collection of the needed context through your own collector.
+
+## Review and the project lexicon
+
+The analyst checkpoint includes low-confidence classifications, unknown terms, and unresolved escalations. You can accept a classification, change its label, add a lexicon entry, or leave it pending.
+
+The lexicon consists of three Markdown files:
+
+- `lexicon/slang.md`: terms and their meanings.
+- `lexicon/techniques.md`: observed techniques and indicators.
+- `lexicon/corrections.md`: previous interpretation errors and corrections.
+
+Investigation agents can propose new terms. These suggestions stay in the investigation records and create an analyst-review escalation; they are not added to the lexicon automatically. Use the checkpoint's **Add to lexicon** action after checking a proposed meaning. The lexicon supplies context to later model calls; it does not train a model or retroactively reclassify existing posts.
+
+Adding a term does not by itself resolve an escalation. Accepting or reclassifying a post records a new classification version and resolves its pending analyst escalation. Run `samovar validate` afterward if that version has medium or high severity: a review of an older version does not validate a later decision.
+
+Confidence and severity are separate fields. The default values are `low`, `medium`, and `high`; they are qualitative judgments, not measured probabilities or a certification against an external analytic standard.
+
+## Reports and state
+
+```text
+my-research/
+├── samovar.yaml          # Project scope, taxonomy, and source configuration
+├── lexicon/              # Terminology and analyst corrections
+├── sources/              # Collector scripts
+├── data/                 # Files retained by your collectors
+├── reports/              # Generated Markdown reports
+└── .samovar/state.db      # Posts, decisions, review history, and runs
+```
+
+Reports use the latest eligible reviewed classification for each post. Dismissed findings and stale reviews are excluded. Unresolved escalations remain visible as items requiring analyst attention, not confirmed findings.
+
+Reports are written to `reports/YYYY-MM-DD_threat_report.md`. Running the report command again on the same day replaces that file, so preserve a copy if you need multiple versions.
+
+The database keeps classification versions and review history. Existing databases are migrated when opened; older reviews whose classification version cannot be established are retained as history and require fresh validation. Back up existing projects before upgrading. Migration cannot recover posts that an older version lost because two sources shared an ID; reimport the source data if it is still available. The database is a research record, not a tamper-evident evidence archive.
 
 ## Default taxonomy
 
-Samovar ships with a default taxonomy oriented toward AI safety threats:
+The template includes these categories:
 
-| Category | Description |
-|----------|-------------|
-| `jailbreak_or_bypass` | Techniques to circumvent model safety measures |
-| `prompt_injection` | Manipulating model behavior through crafted inputs |
-| `proxy_or_reselling` | Unauthorized API access, shared keys, reselling services |
-| `stolen_credentials` | Stolen API keys, compromised accounts |
-| `harmful_content` | Using AI models to generate harmful or illegal content |
-| `capability_elicitation` | Probing or extracting dangerous model capabilities |
-| `none_or_unclear` | No clear safety risk signal |
+- `jailbreak_or_bypass`
+- `prompt_injection`
+- `proxy_or_reselling`
+- `stolen_credentials`
+- `harmful_content`
+- `capability_elicitation`
+- `none_or_unclear`
 
-Projects can extend or replace this taxonomy in their `samovar.yaml`.
+Edit `taxonomy.categories` in `samovar.yaml` to change the labels and descriptions. Source coverage, keywords, and collection filters depend on your collectors; configuration fields alone do not implement those filters.
 
-## Roadmap
+## Data handling and limitations
 
-- [ ] **Source adapters** — Reference integrations for common Russian-platform tools (Telethon for Telegram, vk_api for VK, 2ch.hk JSON API for imageboards). The JSONL collector contract is already compatible; the work is packaging thin wrappers.
-- [ ] **Batch investigation** — Investigate multiple posts in a single agent session to reduce overhead when many posts share a thread.
-- [ ] **Incremental collection** — Track last-collected timestamps per source to avoid re-ingesting old data.
-- [ ] **Report diffing** — Compare findings across report cycles to surface trends automatically.
-- [ ] **Multi-language support** — Skill prompts currently optimize for Russian, but the architecture is language-agnostic. Supporting additional languages would require parallel lexicon and skill prompt sets.
+- Project files and the database are stored locally. Text, lexicon entries, and other context sent to an agent are processed through the selected CLI and its model service. Local storage does not make analysis offline or keep it entirely on your machine.
+- Analysis agents receive context through standard input in a temporary working directory. Samovar requests disabled tools and integrations, suppresses inherited customizations, and uses Codex's read-only sandbox. These are layered CLI restrictions, not a guarantee of complete isolation: CLI versions and managed policies can differ. They also do not establish output accuracy or eliminate prompt-injection risk in source material.
+- Collector scripts execute code with your user account's access. Inspect them, use a suitable environment, and keep credentials out of datasets, configuration, and model context.
+- The project `.gitignore` excludes `data/` and `.samovar/`. Reports, lexicon files, and source code can still contain sensitive material; inspect them before sharing or committing.
+- Russian slang, irony, translation, and incomplete context can cause classification errors. A second model review can also be wrong. Verify consequential claims against the original material.
+- No platform-specific collectors ship with this package. Collection access, rate limits, authentication, and compliance with source terms are the collector author's responsibility.
+- Lexicon matching is case-insensitive substring matching, not linguistic analysis. Keyword discovery, incremental source cursors, and report-to-report trend comparison are not automated end to end.
+- A failed run can retain successful earlier steps. Inspect `samovar status` and the error before retrying; the workflow is not one transaction covering collection through reporting.
+
+## Development
+
+```bash
+python -m pip install -e .
+python -m pip install setuptools wheel
+python -m unittest discover -s tests -v
+```
+
+Tests use temporary projects and mocked agent responses. The packaging test builds and installs a wheel without downloading build dependencies, which is why `setuptools` and `wheel` must already be installed. These tests do not establish live model quality, source accessibility, complete isolation, or compatibility with every agent CLI version. A live provider round trip has not been verified as part of this test suite.
+
+The main components are `samovar.py` for commands and orchestration, `lib/agent.py` for agent processes, `lib/state.py` for persistence, `lib/validation.py` for output checks, and `samovar_resources/` for packaged prompts and templates.
 
 ## License
 
-MIT
+MIT, as declared in [the package metadata](pyproject.toml).
